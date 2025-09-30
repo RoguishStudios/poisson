@@ -1,0 +1,88 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build on (${{ matrix.os }} ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # os: [ ubuntu-latest, windows-latest, macOS-latest ]
+        os: [ ubuntu-latest ]
+        rust: [ stable, beta, nightly ]
+    env:
+      RUST_BACKTRACE: full
+      CI: 'True'
+      RUSTFLAGS: '-D warnings'
+    steps:
+      - name: Check out Source
+        uses: actions/checkout@v5
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Setup Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Build library in "${{ matrix.BUILD_TARGET }}" mode
+        run: cargo build --release
+      - name: Run tests in "${{ matrix.BUILD_TARGET }}" mode
+        run: cargo test --release
+      - name: Run doc tests in "${{ matrix.BUILD_TARGET }}" mode
+        run: cargo doc
+
+  publish:
+    name: Publish Documentation & Crate
+    needs: build
+    permissions:        # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+      contents: read
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v5
+      - name: Setup Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Build & Test Rust Docs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --release
+      - name: Prepare Rust Docs
+        run: echo "<meta http-equiv=\"refresh\" content=\"0; url=cartographer\">" > target/doc/index.html
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: './target/doc'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Login into crates.io
+        run: cargo login ${{ secrets.CRATES_IO }}
+      - name: Build binaries in "release" mode
+        run: cargo build -r
+      - name: "Package for crates.io"
+        run: cargo package # publishes a package as a tarball
+#      - name: "Publish to crates.io"
+#        run: cargo publish # publishes your crate as a library that can be added as a dependency

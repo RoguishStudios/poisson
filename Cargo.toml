@@ -1,0 +1,11 @@
+[package]
+name = "poisson"
+version = "0.1.0"
+edition = "2021"
+description = "Improved version of Bridson's Algorithm for Poisson Disc Sampling by Martin Roberts."
+
+[dependencies]
+rand = { version = "0.9.2", features = ["default"] }
+
+[dev-dependencies]
+rand_xoshiro = { version = "0.7" }
